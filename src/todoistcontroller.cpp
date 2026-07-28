@@ -347,8 +347,15 @@ void TodoistController::checkReminders()
     for (const auto &value : std::as_const(m_allTasks)) {
         const auto task = value.toMap();
         auto due = QDateTime::fromString(task.value(QStringLiteral("dueDateTime")).toString(), Qt::ISODate);
+        bool dateOnly = false;
         if (!due.isValid()) {
-            continue;
+            const auto date = QDate::fromString(
+                task.value(QStringLiteral("dueDate")).toString().left(10), Qt::ISODate);
+            if (date != now.date()) {
+                continue;
+            }
+            due = QDateTime(date, QTime(9, 0));
+            dateOnly = true;
         }
         if (due.timeZone().isValid()) {
             due = due.toLocalTime();
@@ -356,12 +363,15 @@ void TodoistController::checkReminders()
         const auto seconds = now.secsTo(due);
         const auto key = QStringLiteral("reminders/") + task.value(QStringLiteral("id")).toString()
             + QLatin1Char('/') + due.toString(Qt::ISODate);
-        if (seconds >= 0 && seconds <= 15 * 60 && !settings.value(key).toBool()) {
+        const bool shouldNotify = dateOnly ? now.time() >= QTime(9, 0)
+                                           : seconds >= 0 && seconds <= 15 * 60;
+        if (shouldNotify && !settings.value(key).toBool()) {
             auto *notification = new KNotification(QStringLiteral("task-reminder"),
                                                    KNotification::CloseOnTimeout, this);
             notification->setTitle(QStringLiteral("Task due soon"));
             notification->setText(task.value(QStringLiteral("content")).toString()
-                                  + QStringLiteral("\nDue ") + due.toString(QStringLiteral("h:mm AP")));
+                + (dateOnly ? QStringLiteral("\nDue today")
+                            : QStringLiteral("\nDue ") + due.toString(QStringLiteral("h:mm AP"))));
             notification->setIconName(QStringLiteral("checkbox"));
             notification->sendEvent();
             settings.setValue(key, true);

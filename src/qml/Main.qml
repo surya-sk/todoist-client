@@ -21,10 +21,14 @@ Kirigami.ApplicationWindow {
         taskDue.text = task ? task.due : ""
         taskPriority.currentIndex = task ? Math.max(0, task.priority - 1) : 0
         taskProject.currentIndex = -1
+        taskSection.currentIndex = -1
         if (task) {
             for (let i = 0; i < controller.projects.length; ++i)
                 if (controller.projects[i].id === task.projectId)
                     taskProject.currentIndex = i
+            for (let i = 0; i < controller.sections.length; ++i)
+                if (controller.sections[i].id === task.sectionId)
+                    taskSection.currentIndex = i
         }
         taskDialog.open()
         taskTitle.forceActiveFocus()
@@ -108,6 +112,14 @@ Kirigami.ApplicationWindow {
                 valueRole: "id"
                 displayText: currentIndex < 0 ? i18nc("@item", "Current list") : currentText
             }
+            Controls.ComboBox {
+                id: taskSection
+                Layout.fillWidth: true
+                model: controller.sections
+                textRole: "name"
+                valueRole: "id"
+                displayText: currentIndex < 0 ? i18nc("@item", "No section") : currentText
+            }
             RowLayout {
                 Layout.fillWidth: true
                 Controls.Button {
@@ -126,9 +138,10 @@ Kirigami.ApplicationWindow {
                     enabled: taskTitle.text.trim().length > 0
                     onClicked: {
                         let projectId = taskProject.currentIndex >= 0 ? taskProject.currentValue : ""
+                        let sectionId = taskSection.currentIndex >= 0 ? taskSection.currentValue : ""
                         controller.saveTask(taskDialog.taskId, taskTitle.text,
                                             taskDescription.text, taskDue.text,
-                                            projectId, "", taskPriority.currentIndex + 1)
+                                            projectId, sectionId, taskPriority.currentIndex + 1)
                         taskDialog.close()
                     }
                 }
