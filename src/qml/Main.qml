@@ -26,8 +26,9 @@ Kirigami.ApplicationWindow {
             for (let i = 0; i < controller.projects.length; ++i)
                 if (controller.projects[i].id === task.projectId)
                     taskProject.currentIndex = i
-            for (let i = 0; i < controller.sections.length; ++i)
-                if (controller.sections[i].id === task.sectionId)
+            let availableSections = controller.sectionsForProject(task.projectId)
+            for (let i = 0; i < availableSections.length; ++i)
+                if (availableSections[i].id === task.sectionId)
                     taskSection.currentIndex = i
         }
         taskDialog.open()
@@ -115,7 +116,8 @@ Kirigami.ApplicationWindow {
             Controls.ComboBox {
                 id: taskSection
                 Layout.fillWidth: true
-                model: controller.sections
+                model: taskProject.currentIndex < 0
+                       ? [] : controller.sectionsForProject(taskProject.currentValue)
                 textRole: "name"
                 valueRole: "id"
                 displayText: currentIndex < 0 ? i18nc("@item", "No section") : currentText
@@ -285,39 +287,31 @@ Kirigami.ApplicationWindow {
                 }
                 ListView {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: Math.min(contentHeight, Kirigami.Units.gridUnit * 15)
+                    Layout.fillHeight: true
                     clip: true
                     model: controller.projects
-                    delegate: Controls.ItemDelegate {
+                    delegate: Column {
                         required property var modelData
                         width: ListView.view.width
-                        text: modelData.name
-                        icon.name: modelData.inbox ? "mail-folder-inbox" : "folder"
-                        highlighted: controller.selectedTitle === modelData.name
-                        onClicked: controller.selectProject(modelData.id, modelData.name)
-                    }
-                }
-                Controls.Label {
-                    text: i18nc("@title:group", "SECTIONS")
-                    visible: controller.sections.length > 0
-                    color: Kirigami.Theme.disabledTextColor
-                    font.pixelSize: 11
-                    font.weight: Font.DemiBold
-                    Layout.topMargin: Kirigami.Units.largeSpacing
-                }
-                ListView {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    visible: controller.sections.length > 0
-                    clip: true
-                    model: controller.sections
-                    delegate: Controls.ItemDelegate {
-                        required property var modelData
-                        width: ListView.view.width
-                        text: modelData.name
-                        icon.name: "view-list-tree"
-                        highlighted: controller.selectedTitle === modelData.name
-                        onClicked: controller.selectSection(modelData.id, modelData.name)
+                        Controls.ItemDelegate {
+                            width: parent.width
+                            text: modelData.name
+                            icon.name: modelData.inbox ? "mail-folder-inbox" : "folder"
+                            highlighted: controller.selectedTitle === modelData.name
+                            onClicked: controller.selectProject(modelData.id, modelData.name)
+                        }
+                        Repeater {
+                            model: modelData.sections
+                            delegate: Controls.ItemDelegate {
+                                required property var modelData
+                                width: parent.width
+                                leftPadding: Kirigami.Units.gridUnit * 2
+                                text: modelData.name
+                                icon.name: "view-list-tree"
+                                highlighted: controller.selectedTitle === modelData.name
+                                onClicked: controller.selectSection(modelData.id, modelData.name)
+                            }
+                        }
                     }
                 }
                 Controls.Button {

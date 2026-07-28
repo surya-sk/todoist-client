@@ -37,6 +37,7 @@ public:
     Q_INVOKABLE void selectInbox();
     Q_INVOKABLE void selectProject(const QString &id, const QString &name);
     Q_INVOKABLE void selectSection(const QString &id, const QString &name);
+    Q_INVOKABLE QVariantList sectionsForProject(const QString &projectId) const;
     Q_INVOKABLE void refresh();
     Q_INVOKABLE void saveTask(const QString &id, const QString &content,
                               const QString &description, const QString &dueString,

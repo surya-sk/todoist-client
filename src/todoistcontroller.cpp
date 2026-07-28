@@ -132,6 +132,18 @@ void TodoistController::selectSection(const QString &id, const QString &name)
     rebuildVisibleTasks();
 }
 
+QVariantList TodoistController::sectionsForProject(const QString &projectId) const
+{
+    QVariantList result;
+    for (const auto &value : m_sections) {
+        const auto section = value.toMap();
+        if (section.value(QStringLiteral("projectId")).toString() == projectId) {
+            result.append(section);
+        }
+    }
+    return result;
+}
+
 void TodoistController::refresh()
 {
     if (m_token.isEmpty() || m_busy) {
@@ -286,6 +298,13 @@ void TodoistController::mutate(const QString &method, const QString &path,
 
 void TodoistController::rebuildVisibleTasks()
 {
+    for (qsizetype i = 0; i < m_projects.size(); ++i) {
+        auto project = m_projects.at(i).toMap();
+        project.insert(QStringLiteral("sections"),
+                       sectionsForProject(project.value(QStringLiteral("id")).toString()));
+        m_projects[i] = project;
+    }
+
     m_tasks.clear();
     const auto today = QDate::currentDate();
     for (const auto &value : std::as_const(m_allTasks)) {
