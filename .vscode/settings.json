@@ -1,0 +1,6 @@
+{
+    "cmake.configurePreset": "dev",
+    "cmake.buildDirectory": "${workspaceFolder}/build",
+    "C_Cpp.default.compileCommands": "${workspaceFolder}/build/compile_commands.json",
+    "editor.formatOnSave": true
+}

@@ -1,0 +1,10 @@
+[Global]
+IconName=checkbox
+Name=Todoist
+Comment=Todoist reminders
+DesktopEntry=org.suryask.todoist
+
+[Event/task-reminder]
+Name=Task reminder
+Comment=A Todoist task is due
+Action=Popup

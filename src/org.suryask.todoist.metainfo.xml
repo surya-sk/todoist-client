@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.suryask.todoist</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>Todoist</name>
+  <summary>A fast native Todoist client for KDE Plasma</summary>
+  <description><p>Manage Todoist tasks, projects, sections, due dates, and Today from a native KDE application.</p></description>
+  <launchable type="desktop-id">org.suryask.todoist.desktop</launchable>
+  <provides><binary>todoistclient</binary></provides>
+</component>

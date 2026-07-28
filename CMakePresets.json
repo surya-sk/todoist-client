@@ -1,0 +1,10 @@
+{
+  "version": 10,
+  "configurePresets": [{
+    "name": "dev",
+    "generator": "Ninja",
+    "binaryDir": "${sourceDir}/build",
+    "cacheVariables": {"CMAKE_BUILD_TYPE": "Debug"}
+  }],
+  "buildPresets": [{"name": "dev", "configurePreset": "dev"}]
+}
