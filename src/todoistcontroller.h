@@ -17,6 +17,8 @@ class TodoistController final : public QObject
     Q_PROPERTY(QVariantList sections READ sections NOTIFY dataChanged)
     Q_PROPERTY(QVariantList tasks READ tasks NOTIFY dataChanged)
     Q_PROPERTY(QVariantList taskGroups READ taskGroups NOTIFY dataChanged)
+    Q_PROPERTY(QVariantMap account READ account NOTIFY accountChanged)
+    Q_PROPERTY(int todayCount READ todayCount NOTIFY dataChanged)
     Q_PROPERTY(QString selectedTitle READ selectedTitle NOTIFY dataChanged)
     Q_PROPERTY(QString selectedProjectId READ selectedProjectId NOTIFY dataChanged)
     Q_PROPERTY(bool projectView READ projectView NOTIFY dataChanged)
@@ -31,6 +33,8 @@ public:
     QVariantList sections() const;
     QVariantList tasks() const;
     QVariantList taskGroups() const;
+    QVariantMap account() const;
+    int todayCount() const;
     QString selectedTitle() const;
     QString selectedProjectId() const;
     bool projectView() const;
@@ -64,11 +68,13 @@ Q_SIGNALS:
     void connectedChanged();
     void busyChanged();
     void errorChanged();
+    void accountChanged();
 
 private:
     enum class View { Today, Inbox, Project, Section };
     void requestCollection(const QString &path, const QString &kind,
                            const QString &cursor = {});
+    void requestUser();
     void mutate(const QString &method, const QString &path,
                 const QJsonObject &body = {}, bool refreshAfter = true,
                 std::function<void()> success = {});
@@ -85,6 +91,7 @@ private:
     QVariantList m_allTasks;
     QVariantList m_tasks;
     QVariantList m_taskGroups;
+    QVariantMap m_account;
     QString m_selectedTitle = QStringLiteral("Today");
     QString m_selectedId;
     QString m_token;
@@ -95,5 +102,6 @@ private:
     QTimer m_refreshTimer;
     QTimer m_reminderTimer;
     int m_pending = 0;
+    int m_todayCount = 0;
     bool m_busy = false;
 };

@@ -64,6 +64,8 @@ QVariantList TodoistController::projects() const { return m_projects; }
 QVariantList TodoistController::sections() const { return m_sections; }
 QVariantList TodoistController::tasks() const { return m_tasks; }
 QVariantList TodoistController::taskGroups() const { return m_taskGroups; }
+QVariantMap TodoistController::account() const { return m_account; }
+int TodoistController::todayCount() const { return m_todayCount; }
 QString TodoistController::selectedTitle() const { return m_selectedTitle; }
 QString TodoistController::selectedProjectId() const
 {
@@ -103,8 +105,12 @@ void TodoistController::disconnect()
     m_sections.clear();
     m_allTasks.clear();
     m_tasks.clear();
+    m_taskGroups.clear();
+    m_account.clear();
+    m_todayCount = 0;
     m_refreshTimer.stop();
     Q_EMIT connectedChanged();
+    Q_EMIT accountChanged();
     Q_EMIT dataChanged();
 }
 
@@ -164,6 +170,7 @@ void TodoistController::refresh()
     requestCollection(QStringLiteral("projects?limit=200"), QStringLiteral("projects"));
     requestCollection(QStringLiteral("sections?limit=200"), QStringLiteral("sections"));
     requestCollection(QStringLiteral("tasks?limit=200"), QStringLiteral("tasks"));
+    requestUser();
 }
 
 QNetworkRequest TodoistController::requestFor(const QString &path) const
@@ -218,6 +225,36 @@ void TodoistController::requestCollection(const QString &path, const QString &ki
             if (!next.isEmpty()) {
                 requestCollection(path, kind, next);
             }
+        }
+        reply->deleteLater();
+        if (--m_pending == 0) {
+            setBusy(false);
+            rebuildVisibleTasks();
+            checkReminders();
+        }
+    });
+}
+
+void TodoistController::requestUser()
+{
+    ++m_pending;
+    setBusy(true);
+    auto *reply = m_network.get(requestFor(QStringLiteral("user")));
+    connect(reply, &QNetworkReply::finished, this, [this, reply] {
+        const auto status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        if (reply->error() != QNetworkReply::NoError) {
+            setError(status == 401 ? QStringLiteral("Todoist rejected this token.")
+                                   : reply->errorString());
+        } else {
+            const auto user = QJsonDocument::fromJson(reply->readAll()).object();
+            m_account = {
+                {QStringLiteral("id"), user.value(QStringLiteral("id")).toVariant().toString()},
+                {QStringLiteral("name"), user.value(QStringLiteral("full_name")).toString()},
+                {QStringLiteral("email"), user.value(QStringLiteral("email")).toString()},
+                {QStringLiteral("avatar"), user.value(QStringLiteral("avatar_big")).toString()},
+                {QStringLiteral("premium"), user.value(QStringLiteral("is_premium")).toBool()},
+            };
+            Q_EMIT accountChanged();
         }
         reply->deleteLater();
         if (--m_pending == 0) {
@@ -337,11 +374,15 @@ void TodoistController::rebuildVisibleTasks()
 {
     m_tasks.clear();
     const auto today = QDate::currentDate();
+    m_todayCount = 0;
     for (const auto &value : std::as_const(m_allTasks)) {
         auto task = value.toMap();
         const auto projectId = task.value(QStringLiteral("projectId")).toString();
         const auto sectionId = task.value(QStringLiteral("sectionId")).toString();
         const auto due = QDate::fromString(task.value(QStringLiteral("dueDate")).toString().left(10), Qt::ISODate);
+        if (due == today) {
+            ++m_todayCount;
+        }
         bool include = false;
         switch (m_view) {
         case View::Today: include = due.isValid() && due <= today; break;

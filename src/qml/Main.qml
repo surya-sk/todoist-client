@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls as Controls
 import QtQuick.Layouts
+import Qt.labs.platform as Platform
 import org.kde.kirigami as Kirigami
 
 Kirigami.ApplicationWindow {
@@ -13,6 +14,68 @@ Kirigami.ApplicationWindow {
     visible: true
     title: i18nc("@title:window", "Todoist")
     color: "transparent"
+
+    Platform.MenuBar {
+        window: root
+        Platform.Menu {
+            title: i18nc("@title:menu", "&File")
+            Platform.MenuItem {
+                text: i18nc("@action:inmenu", "New &Task")
+                shortcut: "Ctrl+N"
+                enabled: controller.connected
+                onTriggered: root.openTask(null)
+            }
+            Platform.MenuItem {
+                text: i18nc("@action:inmenu", "New &Project")
+                enabled: controller.connected
+                onTriggered: { nameDialog.sectionMode = false; nameDialog.open() }
+            }
+            Platform.MenuItem {
+                text: i18nc("@action:inmenu", "New &Section")
+                enabled: controller.connected && controller.projectView
+                onTriggered: { nameDialog.sectionMode = true; nameDialog.open() }
+            }
+            Platform.MenuSeparator {}
+            Platform.MenuItem {
+                text: i18nc("@action:inmenu", "&Quit")
+                shortcut: "Ctrl+Q"
+                onTriggered: Qt.quit()
+            }
+        }
+        Platform.Menu {
+            title: i18nc("@title:menu", "&View")
+            Platform.MenuItem {
+                text: i18nc("@action:inmenu", "&Today")
+                shortcut: "Ctrl+1"
+                onTriggered: controller.selectToday()
+            }
+            Platform.MenuItem {
+                text: i18nc("@action:inmenu", "&Inbox")
+                shortcut: "Ctrl+2"
+                onTriggered: controller.selectInbox()
+            }
+            Platform.MenuSeparator {}
+            Platform.MenuItem {
+                text: i18nc("@action:inmenu", "&Refresh")
+                shortcut: "Ctrl+R"
+                enabled: controller.connected && !controller.busy
+                onTriggered: controller.refresh()
+            }
+        }
+        Platform.Menu {
+            title: i18nc("@title:menu", "&Account")
+            Platform.MenuItem {
+                text: i18nc("@action:inmenu", "Account &Details")
+                enabled: controller.connected
+                onTriggered: accountDialog.open()
+            }
+            Platform.MenuItem {
+                text: i18nc("@action:inmenu", "&Log Out")
+                enabled: controller.connected
+                onTriggered: controller.disconnect()
+            }
+        }
+    }
 
     function openTask(task) {
         taskDialog.taskId = task ? task.id : ""
@@ -225,6 +288,69 @@ Kirigami.ApplicationWindow {
         }
     }
 
+    Controls.Dialog {
+        id: accountDialog
+        anchors.centerIn: parent
+        modal: true
+        width: Math.min(440, root.width - 40)
+        title: i18nc("@title:dialog", "Todoist account")
+        standardButtons: Controls.Dialog.Close
+        contentItem: ColumnLayout {
+            spacing: Kirigami.Units.largeSpacing
+            Rectangle {
+                Layout.alignment: Qt.AlignHCenter
+                width: 88
+                height: 88
+                radius: width / 2
+                clip: true
+                color: Kirigami.Theme.highlightColor
+                Controls.Label {
+                    anchors.centerIn: parent
+                    text: controller.account.name
+                          ? controller.account.name.split(/\s+/).map(word => word[0]).join("").slice(0, 2).toUpperCase()
+                          : "T"
+                    color: Kirigami.Theme.highlightedTextColor
+                    font.pixelSize: 28
+                    font.weight: Font.DemiBold
+                }
+                Image {
+                    anchors.fill: parent
+                    source: controller.account.avatar || ""
+                    fillMode: Image.PreserveAspectCrop
+                    asynchronous: true
+                    visible: status === Image.Ready
+                }
+            }
+            Controls.Label {
+                Layout.alignment: Qt.AlignHCenter
+                text: controller.account.name || i18nc("@info", "Todoist account")
+                font.pixelSize: 20
+                font.weight: Font.DemiBold
+            }
+            Controls.Label {
+                Layout.alignment: Qt.AlignHCenter
+                text: controller.account.email || ""
+                color: Kirigami.Theme.disabledTextColor
+            }
+            Controls.Label {
+                Layout.alignment: Qt.AlignHCenter
+                visible: controller.account.premium === true
+                text: i18nc("@info", "Todoist Pro")
+                color: Kirigami.Theme.positiveTextColor
+            }
+            Kirigami.Separator { Layout.fillWidth: true }
+            Controls.Button {
+                Layout.fillWidth: true
+                text: i18nc("@action:button", "Log out")
+                icon.name: "system-log-out"
+                onClicked: {
+                    controller.disconnect()
+                    accountDialog.close()
+                }
+            }
+        }
+    }
+
     globalDrawer: Kirigami.GlobalDrawer {
         title: i18nc("@title", "Todoist")
         titleIcon: "checkbox"
@@ -293,10 +419,35 @@ Kirigami.ApplicationWindow {
                 }
                 Controls.ItemDelegate {
                     Layout.fillWidth: true
-                    text: i18nc("@title", "Today")
                     icon.name: "view-calendar-day"
                     highlighted: controller.selectedTitle === "Today"
                     onClicked: controller.selectToday()
+                    contentItem: RowLayout {
+                        Kirigami.Icon {
+                            source: "view-calendar-day"
+                            implicitWidth: Kirigami.Units.iconSizes.smallMedium
+                            implicitHeight: implicitWidth
+                        }
+                        Controls.Label {
+                            Layout.fillWidth: true
+                            text: i18nc("@title", "Today")
+                        }
+                        Rectangle {
+                            visible: controller.todayCount > 0
+                            implicitWidth: Math.max(24, badgeText.implicitWidth + 12)
+                            implicitHeight: 22
+                            radius: implicitHeight / 2
+                            color: Kirigami.Theme.highlightColor
+                            Controls.Label {
+                                id: badgeText
+                                anchors.centerIn: parent
+                                text: controller.todayCount
+                                color: Kirigami.Theme.highlightedTextColor
+                                font.pixelSize: 11
+                                font.weight: Font.Bold
+                            }
+                        }
+                    }
                 }
                 Controls.ItemDelegate {
                     Layout.fillWidth: true
@@ -334,12 +485,64 @@ Kirigami.ApplicationWindow {
                         onClicked: controller.selectProject(modelData.id, modelData.name)
                     }
                 }
+                Controls.ItemDelegate {
+                    Layout.fillWidth: true
+                    visible: controller.connected
+                    onClicked: accountDialog.open()
+                    contentItem: RowLayout {
+                        Rectangle {
+                            width: 36
+                            height: 36
+                            radius: width / 2
+                            clip: true
+                            color: Kirigami.Theme.highlightColor
+                            Controls.Label {
+                                anchors.centerIn: parent
+                                text: controller.account.name
+                                      ? controller.account.name.split(/\s+/).map(word => word[0]).join("").slice(0, 2).toUpperCase()
+                                      : "T"
+                                color: Kirigami.Theme.highlightedTextColor
+                                font.weight: Font.DemiBold
+                            }
+                            Image {
+                                anchors.fill: parent
+                                source: controller.account.avatar || ""
+                                fillMode: Image.PreserveAspectCrop
+                                asynchronous: true
+                                visible: status === Image.Ready
+                            }
+                        }
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 0
+                            Controls.Label {
+                                Layout.fillWidth: true
+                                text: controller.account.name || i18nc("@info", "Todoist account")
+                                font.weight: Font.DemiBold
+                                elide: Text.ElideRight
+                            }
+                            Controls.Label {
+                                Layout.fillWidth: true
+                                text: controller.account.email || ""
+                                color: Kirigami.Theme.disabledTextColor
+                                font.pixelSize: 10
+                                elide: Text.ElideRight
+                            }
+                        }
+                        Kirigami.Icon {
+                            source: "go-next"
+                            implicitWidth: Kirigami.Units.iconSizes.small
+                            implicitHeight: implicitWidth
+                        }
+                    }
+                }
                 Controls.Button {
                     Layout.fillWidth: true
-                    text: controller.connected ? i18nc("@action:button", "Refresh") : i18nc("@action:button", "Connect Todoist")
-                    icon.name: controller.connected ? "view-refresh" : "network-connect"
+                    visible: !controller.connected
+                    text: i18nc("@action:button", "Connect Todoist")
+                    icon.name: "network-connect"
                     enabled: !controller.busy
-                    onClicked: controller.connected ? controller.refresh() : tokenDialog.open()
+                    onClicked: tokenDialog.open()
                 }
             }
         }
