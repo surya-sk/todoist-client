@@ -26,6 +26,13 @@ int main(int argc, char **argv)
     QQuickStyle::setStyle(QStringLiteral("org.kde.desktop"));
 
     TodoistController controller;
+    QObject::connect(&controller, &TodoistController::dataChanged, &app, [&app, &controller] {
+        app.setBadgeNumber(controller.todayCount());
+    });
+    QObject::connect(&app, &QCoreApplication::aboutToQuit, &app, [&app] {
+        app.setBadgeNumber(0);
+    });
+
     QQmlApplicationEngine engine;
     QObject::connect(&engine, &QQmlEngine::warnings, [](const QList<QQmlError> &warnings) {
         for (const auto &warning : warnings) {
