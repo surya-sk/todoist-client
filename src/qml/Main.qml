@@ -16,12 +16,14 @@ Kirigami.ApplicationWindow {
 
     function openTask(task) {
         taskDialog.taskId = task ? task.id : ""
+        taskDialog.originalProjectId = task ? task.projectId : ""
+        taskDialog.originalSectionId = task ? task.sectionId : ""
         taskTitle.text = task ? task.content : ""
         taskDescription.text = task ? task.description : ""
         taskDue.text = task ? task.due : ""
         taskPriority.currentIndex = task ? Math.max(0, task.priority - 1) : 0
         taskProject.currentIndex = -1
-        taskSection.currentIndex = -1
+        taskSection.currentIndex = 0
         if (task) {
             for (let i = 0; i < controller.projects.length; ++i)
                 if (controller.projects[i].id === task.projectId)
@@ -29,7 +31,15 @@ Kirigami.ApplicationWindow {
             let availableSections = controller.sectionsForProject(task.projectId)
             for (let i = 0; i < availableSections.length; ++i)
                 if (availableSections[i].id === task.sectionId)
-                    taskSection.currentIndex = i
+                    taskSection.currentIndex = i + 1
+        } else if (controller.projectView) {
+            for (let i = 0; i < controller.projects.length; ++i)
+                if (controller.projects[i].id === controller.selectedProjectId)
+                    taskProject.currentIndex = i
+        } else {
+            for (let i = 0; i < controller.projects.length; ++i)
+                if (controller.projects[i].inbox)
+                    taskProject.currentIndex = i
         }
         taskDialog.open()
         taskTitle.forceActiveFocus()
@@ -72,6 +82,8 @@ Kirigami.ApplicationWindow {
     Controls.Dialog {
         id: taskDialog
         property string taskId: ""
+        property string originalProjectId: ""
+        property string originalSectionId: ""
         anchors.centerIn: parent
         modal: true
         width: Math.min(620, root.width - 40)
@@ -111,16 +123,16 @@ Kirigami.ApplicationWindow {
                 model: controller.projects
                 textRole: "name"
                 valueRole: "id"
-                displayText: currentIndex < 0 ? i18nc("@item", "Current list") : currentText
+                onCurrentValueChanged: taskSection.currentIndex = 0
             }
             Controls.ComboBox {
                 id: taskSection
                 Layout.fillWidth: true
-                model: taskProject.currentIndex < 0
-                       ? [] : controller.sectionsForProject(taskProject.currentValue)
+                model: [{ "id": "", "name": i18nc("@item", "No section") }].concat(
+                           taskProject.currentValue
+                           ? controller.sectionsForProject(taskProject.currentValue) : [])
                 textRole: "name"
                 valueRole: "id"
-                displayText: currentIndex < 0 ? i18nc("@item", "No section") : currentText
             }
             RowLayout {
                 Layout.fillWidth: true
@@ -139,11 +151,13 @@ Kirigami.ApplicationWindow {
                     highlighted: true
                     enabled: taskTitle.text.trim().length > 0
                     onClicked: {
-                        let projectId = taskProject.currentIndex >= 0 ? taskProject.currentValue : ""
-                        let sectionId = taskSection.currentIndex >= 0 ? taskSection.currentValue : ""
+                        let projectId = taskProject.currentValue
+                        let sectionId = taskSection.currentValue
                         controller.saveTask(taskDialog.taskId, taskTitle.text,
                                             taskDescription.text, taskDue.text,
-                                            projectId, sectionId, taskPriority.currentIndex + 1)
+                                            projectId, sectionId, taskPriority.currentIndex + 1,
+                                            taskDialog.originalProjectId,
+                                            taskDialog.originalSectionId)
                         taskDialog.close()
                     }
                 }
@@ -166,14 +180,6 @@ Kirigami.ApplicationWindow {
                 Layout.fillWidth: true
                 placeholderText: nameDialog.sectionMode ? i18nc("@info:placeholder", "Section name") : i18nc("@info:placeholder", "Project name")
             }
-            Controls.ComboBox {
-                id: sectionProject
-                Layout.fillWidth: true
-                visible: nameDialog.sectionMode
-                model: controller.projects
-                textRole: "name"
-                valueRole: "id"
-            }
             Controls.Button {
                 Layout.alignment: Qt.AlignRight
                 text: i18nc("@action:button", "Create")
@@ -181,10 +187,39 @@ Kirigami.ApplicationWindow {
                 enabled: newName.text.trim().length > 0
                 onClicked: {
                     if (nameDialog.sectionMode)
-                        controller.createSection(newName.text, sectionProject.currentValue)
+                        controller.createSection(newName.text, controller.selectedProjectId)
                     else
                         controller.createProject(newName.text)
                     nameDialog.close()
+                }
+            }
+        }
+    }
+
+    Controls.Dialog {
+        id: deleteSectionDialog
+        property string sectionId: ""
+        property string sectionName: ""
+        anchors.centerIn: parent
+        modal: true
+        width: Math.min(480, root.width - 40)
+        title: i18nc("@title:dialog", "Delete section?")
+        standardButtons: Controls.Dialog.Cancel
+        contentItem: ColumnLayout {
+            spacing: Kirigami.Units.largeSpacing
+            Kirigami.InlineMessage {
+                Layout.fillWidth: true
+                visible: true
+                type: Kirigami.MessageType.Warning
+                text: i18nc("@info", "Deleting “%1” also permanently deletes every task in it.", deleteSectionDialog.sectionName)
+            }
+            Controls.Button {
+                Layout.alignment: Qt.AlignRight
+                text: i18nc("@action:button", "Delete section")
+                icon.name: "edit-delete"
+                onClicked: {
+                    controller.deleteSection(deleteSectionDialog.sectionId)
+                    deleteSectionDialog.close()
                 }
             }
         }
@@ -210,7 +245,7 @@ Kirigami.ApplicationWindow {
             Kirigami.Action {
                 text: i18nc("@action", "New section")
                 icon.name: "view-list-tree"
-                enabled: controller.connected && controller.projects.length > 0
+                enabled: controller.connected && controller.projectView
                 onTriggered: { nameDialog.sectionMode = true; nameDialog.open() }
             },
             Kirigami.Action {
@@ -290,28 +325,13 @@ Kirigami.ApplicationWindow {
                     Layout.fillHeight: true
                     clip: true
                     model: controller.projects
-                    delegate: Column {
+                    delegate: Controls.ItemDelegate {
                         required property var modelData
                         width: ListView.view.width
-                        Controls.ItemDelegate {
-                            width: parent.width
-                            text: modelData.name
-                            icon.name: modelData.inbox ? "mail-folder-inbox" : "folder"
-                            highlighted: controller.selectedTitle === modelData.name
-                            onClicked: controller.selectProject(modelData.id, modelData.name)
-                        }
-                        Repeater {
-                            model: modelData.sections
-                            delegate: Controls.ItemDelegate {
-                                required property var modelData
-                                width: parent.width
-                                leftPadding: Kirigami.Units.gridUnit * 2
-                                text: modelData.name
-                                icon.name: "view-list-tree"
-                                highlighted: controller.selectedTitle === modelData.name
-                                onClicked: controller.selectSection(modelData.id, modelData.name)
-                            }
-                        }
+                        text: modelData.name
+                        icon.name: modelData.inbox ? "mail-folder-inbox" : "folder"
+                        highlighted: controller.selectedTitle === modelData.name
+                        onClicked: controller.selectProject(modelData.id, modelData.name)
                     }
                 }
                 Controls.Button {
@@ -351,6 +371,13 @@ Kirigami.ApplicationWindow {
                     }
                     Controls.BusyIndicator { running: controller.busy; visible: running }
                     Controls.Button {
+                        visible: controller.projectView
+                        text: i18nc("@action:button", "Add section")
+                        icon.name: "view-list-tree"
+                        enabled: controller.connected
+                        onClicked: { nameDialog.sectionMode = true; nameDialog.open() }
+                    }
+                    Controls.Button {
                         text: i18nc("@action:button", "Add task")
                         icon.name: "list-add"
                         highlighted: true
@@ -369,7 +396,7 @@ Kirigami.ApplicationWindow {
                 Kirigami.PlaceholderMessage {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    visible: !controller.busy && controller.tasks.length === 0
+                    visible: !controller.busy && controller.taskGroups.length === 0
                     icon.name: controller.connected ? "checkmark" : "network-disconnect"
                     text: controller.connected ? i18nc("@info", "All clear") : i18nc("@info", "Connect Todoist to see your tasks")
                     helpfulAction: Kirigami.Action {
@@ -381,50 +408,101 @@ Kirigami.ApplicationWindow {
                 ListView {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    visible: controller.tasks.length > 0
-                    spacing: Kirigami.Units.smallSpacing
+                    visible: controller.taskGroups.length > 0
+                    spacing: Kirigami.Units.largeSpacing
                     clip: true
-                    model: controller.tasks
-                    delegate: Controls.ItemDelegate {
+                    model: controller.taskGroups
+                    delegate: Column {
                         required property var modelData
                         width: ListView.view.width
-                        implicitHeight: Math.max(72, contentRow.implicitHeight + 20)
-                        onClicked: root.openTask(modelData)
-                        contentItem: RowLayout {
-                            id: contentRow
-                            spacing: Kirigami.Units.largeSpacing
-                            Controls.CheckBox {
-                                onClicked: controller.completeTask(modelData.id)
-                            }
-                            ColumnLayout {
+                        spacing: Kirigami.Units.smallSpacing
+                        RowLayout {
+                            width: parent.width
+                            visible: modelData.name.length > 0
+                            Controls.Label {
                                 Layout.fillWidth: true
-                                spacing: 3
-                                Controls.Label {
-                                    Layout.fillWidth: true
-                                    text: modelData.content
-                                    font.weight: Font.DemiBold
-                                    wrapMode: Text.Wrap
+                                text: modelData.name
+                                font.pixelSize: 18
+                                font.weight: Font.DemiBold
+                            }
+                            Controls.ToolButton {
+                                icon.name: "list-add"
+                                onClicked: {
+                                    root.openTask(null)
+                                    for (let i = 0; i < taskSection.count; ++i)
+                                        if (taskSection.model[i].id === modelData.id)
+                                            taskSection.currentIndex = i
                                 }
-                                Controls.Label {
-                                    Layout.fillWidth: true
-                                    visible: modelData.description.length > 0
-                                    text: modelData.description
-                                    color: Kirigami.Theme.disabledTextColor
-                                    elide: Text.ElideRight
+                                Controls.ToolTip.text: i18nc("@info:tooltip", "Add task to section")
+                                Controls.ToolTip.visible: hovered
+                            }
+                            Controls.ToolButton {
+                                icon.name: "edit-delete"
+                                onClicked: {
+                                    deleteSectionDialog.sectionId = modelData.id
+                                    deleteSectionDialog.sectionName = modelData.name
+                                    deleteSectionDialog.open()
                                 }
-                                Controls.Label {
-                                    text: [modelData.project, modelData.section, modelData.due].filter(Boolean).join("  ·  ")
-                                    color: modelData.dueDate && modelData.dueDate.slice(0, 10) <= Qt.formatDate(new Date(), "yyyy-MM-dd")
-                                           ? Kirigami.Theme.negativeTextColor : Kirigami.Theme.disabledTextColor
-                                    font.pixelSize: 11
+                                Controls.ToolTip.text: i18nc("@info:tooltip", "Delete section")
+                                Controls.ToolTip.visible: hovered
+                            }
+                        }
+                        Repeater {
+                            model: modelData.tasks
+                            delegate: Controls.ItemDelegate {
+                                required property var modelData
+                                width: parent.width
+                                implicitHeight: Math.max(72, taskRow.implicitHeight + 20)
+                                onClicked: root.openTask(modelData)
+                                contentItem: RowLayout {
+                                    id: taskRow
+                                    spacing: Kirigami.Units.largeSpacing
+                                    Controls.CheckBox {
+                                        onClicked: controller.completeTask(modelData.id)
+                                    }
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 3
+                                        Controls.Label {
+                                            Layout.fillWidth: true
+                                            text: modelData.content
+                                            font.weight: Font.DemiBold
+                                            wrapMode: Text.Wrap
+                                        }
+                                        Controls.Label {
+                                            Layout.fillWidth: true
+                                            visible: modelData.description.length > 0
+                                            text: modelData.description
+                                            color: Kirigami.Theme.disabledTextColor
+                                            elide: Text.ElideRight
+                                        }
+                                        Controls.Label {
+                                            text: [modelData.project, modelData.due].filter(Boolean).join("  ·  ")
+                                            color: modelData.dueDate && modelData.dueDate.slice(0, 10) <= Qt.formatDate(new Date(), "yyyy-MM-dd")
+                                                   ? Kirigami.Theme.negativeTextColor : Kirigami.Theme.disabledTextColor
+                                            font.pixelSize: 11
+                                        }
+                                    }
+                                    Kirigami.Icon {
+                                        visible: modelData.priority > 1
+                                        source: "flag"
+                                        color: modelData.priority === 4 ? Kirigami.Theme.negativeTextColor
+                                              : modelData.priority === 3 ? Kirigami.Theme.neutralTextColor
+                                              : Kirigami.Theme.highlightColor
+                                    }
                                 }
                             }
-                            Kirigami.Icon {
-                                visible: modelData.priority > 1
-                                source: "flag"
-                                color: modelData.priority === 4 ? Kirigami.Theme.negativeTextColor
-                                      : modelData.priority === 3 ? Kirigami.Theme.neutralTextColor
-                                      : Kirigami.Theme.highlightColor
+                        }
+                        Controls.Button {
+                            visible: modelData.name.length > 0 && modelData.tasks.length === 0
+                            text: i18nc("@action:button", "Add task")
+                            icon.name: "list-add"
+                            flat: true
+                            onClicked: {
+                                root.openTask(null)
+                                for (let i = 0; i < taskSection.count; ++i)
+                                    if (taskSection.model[i].id === modelData.id)
+                                        taskSection.currentIndex = i
                             }
                         }
                     }

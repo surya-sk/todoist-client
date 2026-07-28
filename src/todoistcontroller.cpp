@@ -10,6 +10,8 @@
 #include <QTimeZone>
 #include <QUuid>
 
+#include <utility>
+
 namespace {
 const QUrl apiBase(QStringLiteral("https://api.todoist.com/api/v1/"));
 
@@ -61,7 +63,13 @@ TodoistController::TodoistController(QObject *parent)
 QVariantList TodoistController::projects() const { return m_projects; }
 QVariantList TodoistController::sections() const { return m_sections; }
 QVariantList TodoistController::tasks() const { return m_tasks; }
+QVariantList TodoistController::taskGroups() const { return m_taskGroups; }
 QString TodoistController::selectedTitle() const { return m_selectedTitle; }
+QString TodoistController::selectedProjectId() const
+{
+    return m_view == View::Project ? m_selectedId : QString{};
+}
+bool TodoistController::projectView() const { return m_view == View::Project; }
 bool TodoistController::connected() const { return !m_token.isEmpty(); }
 bool TodoistController::busy() const { return m_busy; }
 QString TodoistController::error() const { return m_error; }
@@ -223,7 +231,8 @@ void TodoistController::requestCollection(const QString &path, const QString &ki
 void TodoistController::saveTask(const QString &id, const QString &content,
                                  const QString &description, const QString &dueString,
                                  const QString &projectId, const QString &sectionId,
-                                 int priority)
+                                 int priority, const QString &originalProjectId,
+                                 const QString &originalSectionId)
 {
     if (content.trimmed().isEmpty()) {
         setError(QStringLiteral("A task needs a title."));
@@ -243,7 +252,23 @@ void TodoistController::saveTask(const QString &id, const QString &content,
         }
         mutate(QStringLiteral("POST"), QStringLiteral("tasks"), body);
     } else {
-        mutate(QStringLiteral("POST"), QStringLiteral("tasks/") + id, body);
+        const bool moved = projectId != originalProjectId || sectionId != originalSectionId;
+        if (moved) {
+            QJsonObject destination;
+            if (!sectionId.isEmpty()) {
+                destination.insert(QStringLiteral("section_id"), sectionId);
+            } else {
+                destination.insert(QStringLiteral("project_id"), projectId);
+            }
+            mutate(QStringLiteral("POST"), QStringLiteral("tasks/") + id, body, false,
+                   [this, id, destination] {
+                       mutate(QStringLiteral("POST"),
+                              QStringLiteral("tasks/") + id + QStringLiteral("/move"),
+                              destination);
+                   });
+        } else {
+            mutate(QStringLiteral("POST"), QStringLiteral("tasks/") + id, body);
+        }
     }
 }
 
@@ -274,18 +299,30 @@ void TodoistController::createSection(const QString &name, const QString &projec
     }
 }
 
+void TodoistController::deleteSection(const QString &id)
+{
+    if (!id.isEmpty()) {
+        mutate(QStringLiteral("DELETE"), QStringLiteral("sections/") + id);
+    }
+}
+
 void TodoistController::mutate(const QString &method, const QString &path,
-                               const QJsonObject &body, bool refreshAfter)
+                               const QJsonObject &body, bool refreshAfter,
+                               std::function<void()> success)
 {
     setBusy(true);
     const auto payload = QJsonDocument(body).toJson(QJsonDocument::Compact);
     auto *reply = m_network.sendCustomRequest(requestFor(path), method.toUtf8(), payload);
-    connect(reply, &QNetworkReply::finished, this, [this, reply, refreshAfter] {
+    connect(reply, &QNetworkReply::finished, this,
+            [this, reply, refreshAfter, success = std::move(success)] {
         const auto status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
         if (reply->error() != QNetworkReply::NoError && status != 204) {
             const auto object = QJsonDocument::fromJson(reply->readAll()).object();
             setError(object.value(QStringLiteral("error")).toString(reply->errorString()));
             setBusy(false);
+        } else if (success) {
+            setBusy(false);
+            success();
         } else if (refreshAfter) {
             setBusy(false);
             refresh();
@@ -298,13 +335,6 @@ void TodoistController::mutate(const QString &method, const QString &path,
 
 void TodoistController::rebuildVisibleTasks()
 {
-    for (qsizetype i = 0; i < m_projects.size(); ++i) {
-        auto project = m_projects.at(i).toMap();
-        project.insert(QStringLiteral("sections"),
-                       sectionsForProject(project.value(QStringLiteral("id")).toString()));
-        m_projects[i] = project;
-    }
-
     m_tasks.clear();
     const auto today = QDate::currentDate();
     for (const auto &value : std::as_const(m_allTasks)) {
@@ -333,6 +363,47 @@ void TodoistController::rebuildVisibleTasks()
             task.insert(QStringLiteral("section"), sectionName(sectionId));
             m_tasks.append(task);
         }
+    }
+
+    m_taskGroups.clear();
+    if (m_view == View::Project) {
+        QVariantList unsectioned;
+        for (const auto &value : std::as_const(m_tasks)) {
+            if (value.toMap().value(QStringLiteral("sectionId")).toString().isEmpty()) {
+                unsectioned.append(value);
+            }
+        }
+        if (!unsectioned.isEmpty()) {
+            m_taskGroups.append(QVariantMap{
+                {QStringLiteral("id"), QString{}},
+                {QStringLiteral("name"), QString{}},
+                {QStringLiteral("deletable"), false},
+                {QStringLiteral("tasks"), unsectioned},
+            });
+        }
+        for (const auto &value : sectionsForProject(m_selectedId)) {
+            const auto section = value.toMap();
+            QVariantList sectionTasks;
+            for (const auto &taskValue : std::as_const(m_tasks)) {
+                if (taskValue.toMap().value(QStringLiteral("sectionId")).toString()
+                    == section.value(QStringLiteral("id")).toString()) {
+                    sectionTasks.append(taskValue);
+                }
+            }
+            m_taskGroups.append(QVariantMap{
+                {QStringLiteral("id"), section.value(QStringLiteral("id"))},
+                {QStringLiteral("name"), section.value(QStringLiteral("name"))},
+                {QStringLiteral("deletable"), true},
+                {QStringLiteral("tasks"), sectionTasks},
+            });
+        }
+    } else if (!m_tasks.isEmpty()) {
+        m_taskGroups.append(QVariantMap{
+            {QStringLiteral("id"), QString{}},
+            {QStringLiteral("name"), QString{}},
+            {QStringLiteral("deletable"), false},
+            {QStringLiteral("tasks"), m_tasks},
+        });
     }
     Q_EMIT dataChanged();
 }

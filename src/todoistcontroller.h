@@ -8,13 +8,18 @@
 #include <QTimer>
 #include <QVariantList>
 
+#include <functional>
+
 class TodoistController final : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(QVariantList projects READ projects NOTIFY dataChanged)
     Q_PROPERTY(QVariantList sections READ sections NOTIFY dataChanged)
     Q_PROPERTY(QVariantList tasks READ tasks NOTIFY dataChanged)
+    Q_PROPERTY(QVariantList taskGroups READ taskGroups NOTIFY dataChanged)
     Q_PROPERTY(QString selectedTitle READ selectedTitle NOTIFY dataChanged)
+    Q_PROPERTY(QString selectedProjectId READ selectedProjectId NOTIFY dataChanged)
+    Q_PROPERTY(bool projectView READ projectView NOTIFY dataChanged)
     Q_PROPERTY(bool connected READ connected NOTIFY connectedChanged)
     Q_PROPERTY(bool busy READ busy NOTIFY busyChanged)
     Q_PROPERTY(QString error READ error NOTIFY errorChanged)
@@ -25,7 +30,10 @@ public:
     QVariantList projects() const;
     QVariantList sections() const;
     QVariantList tasks() const;
+    QVariantList taskGroups() const;
     QString selectedTitle() const;
+    QString selectedProjectId() const;
+    bool projectView() const;
     bool connected() const;
     bool busy() const;
     QString error() const;
@@ -42,11 +50,13 @@ public:
     Q_INVOKABLE void saveTask(const QString &id, const QString &content,
                               const QString &description, const QString &dueString,
                               const QString &projectId, const QString &sectionId,
-                              int priority);
+                              int priority, const QString &originalProjectId = {},
+                              const QString &originalSectionId = {});
     Q_INVOKABLE void completeTask(const QString &id);
     Q_INVOKABLE void deleteTask(const QString &id);
     Q_INVOKABLE void createProject(const QString &name);
     Q_INVOKABLE void createSection(const QString &name, const QString &projectId);
+    Q_INVOKABLE void deleteSection(const QString &id);
     Q_INVOKABLE void clearError();
 
 Q_SIGNALS:
@@ -60,7 +70,8 @@ private:
     void requestCollection(const QString &path, const QString &kind,
                            const QString &cursor = {});
     void mutate(const QString &method, const QString &path,
-                const QJsonObject &body = {}, bool refreshAfter = true);
+                const QJsonObject &body = {}, bool refreshAfter = true,
+                std::function<void()> success = {});
     QNetworkRequest requestFor(const QString &path) const;
     void setBusy(bool busy);
     void setError(const QString &error);
@@ -73,6 +84,7 @@ private:
     QVariantList m_sections;
     QVariantList m_allTasks;
     QVariantList m_tasks;
+    QVariantList m_taskGroups;
     QString m_selectedTitle = QStringLiteral("Today");
     QString m_selectedId;
     QString m_token;
