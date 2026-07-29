@@ -2,11 +2,15 @@
 
 #include <KNotification>
 #include <QDate>
+#include <QDir>
+#include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonValue>
 #include <QNetworkReply>
+#include <QSaveFile>
 #include <QSettings>
+#include <QStandardPaths>
 #include <QTimeZone>
 #include <QUuid>
 
@@ -109,6 +113,7 @@ void TodoistController::disconnect()
     m_account.clear();
     m_todayCount = 0;
     m_refreshTimer.stop();
+    writeWidgetTaskCache();
     Q_EMIT connectedChanged();
     Q_EMIT accountChanged();
     Q_EMIT dataChanged();
@@ -447,6 +452,54 @@ void TodoistController::rebuildVisibleTasks()
         });
     }
     Q_EMIT dataChanged();
+    writeWidgetTaskCache();
+}
+
+void TodoistController::writeWidgetTaskCache() const
+{
+    const auto dataRoot = QStandardPaths::writableLocation(
+        QStandardPaths::GenericDataLocation);
+    const auto directory = dataRoot + QStringLiteral("/org.suryask.todoist");
+    if (!QDir().mkpath(directory)) {
+        return;
+    }
+
+    const auto today = QDate::currentDate();
+    QJsonArray tasks;
+    for (const auto &value : m_allTasks) {
+        auto task = value.toMap();
+        const auto due = QDate::fromString(
+            task.value(QStringLiteral("dueDate")).toString().left(10),
+            Qt::ISODate);
+        if (!due.isValid() || due > today) {
+            continue;
+        }
+        task.insert(
+            QStringLiteral("project"),
+            projectName(task.value(QStringLiteral("projectId")).toString()));
+        task.insert(
+            QStringLiteral("section"),
+            sectionName(task.value(QStringLiteral("sectionId")).toString()));
+        task.insert(QStringLiteral("overdue"), due < today);
+        tasks.append(QJsonObject::fromVariantMap(task));
+    }
+
+    const QJsonObject root{
+        {QStringLiteral("updatedAt"),
+         QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs)},
+        {QStringLiteral("connected"), !m_token.isEmpty()},
+        {QStringLiteral("tasks"), tasks},
+    };
+    const auto path = directory + QStringLiteral("/widget-tasks.json");
+    QSaveFile file(path);
+    if (!file.open(QIODevice::WriteOnly)) {
+        return;
+    }
+    file.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner);
+    file.write(QJsonDocument(root).toJson(QJsonDocument::Compact));
+    file.commit();
+    QFile::setPermissions(path,
+                          QFileDevice::ReadOwner | QFileDevice::WriteOwner);
 }
 
 QString TodoistController::projectName(const QString &id) const

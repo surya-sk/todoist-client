@@ -1,0 +1,15 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [{"Name": "Surya"}],
+        "Category": "Utilities",
+        "Description": "Today's tasks from the Todoist desktop application",
+        "Icon": "view-task",
+        "Id": "org.suryask.todoisttoday",
+        "License": "GPL-3.0-or-later",
+        "Name": "Todoist Today",
+        "Version": "1.0.0"
+    },
+    "X-KDE-ParentApp": "org.kde.plasmashell",
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

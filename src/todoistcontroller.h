@@ -82,6 +82,7 @@ private:
     void setBusy(bool busy);
     void setError(const QString &error);
     void rebuildVisibleTasks();
+    void writeWidgetTaskCache() const;
     void checkReminders();
     QString projectName(const QString &id) const;
     QString sectionName(const QString &id) const;
