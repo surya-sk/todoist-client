@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=Todoist
 Comment=A fast native Todoist client
-Exec=/home/surya/.local/bin/todoistclient
+Exec=@KDE_INSTALL_FULL_BINDIR@/todoistclient
 Icon=todoist
 Type=Application
 Categories=Office;ProjectManagement;Qt;KDE;

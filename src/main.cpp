@@ -1,10 +1,12 @@
 #include "todoistcontroller.h"
+#include "notificationmetadata.h"
 
 #include <KAboutData>
 #include <KLocalizedQmlContext>
 #include <KLocalizedString>
 #include <KWindowEffects>
 #include <QGuiApplication>
+#include <QDebug>
 #include <QQmlApplicationEngine>
 #include <QQuickStyle>
 #include <QTimer>
@@ -25,6 +27,11 @@ int main(int argc, char **argv)
     KAboutData::setApplicationData(about);
     QGuiApplication::setDesktopFileName(about.desktopFileName());
     QQuickStyle::setStyle(QStringLiteral("org.kde.desktop"));
+    if (!ensureNotificationMetadata(
+            QStringLiteral("org.suryask.todoist.notifyrc"),
+            QStringLiteral(":/org.suryask.todoist.notifyrc"))) {
+        qWarning() << "Could not register Todoist notification metadata";
+    }
 
     TodoistController controller;
     const bool syncWidget = app.arguments().contains(

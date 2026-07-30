@@ -1,9 +1,16 @@
 qt_add_executable(todoistclient
     main.cpp
+    notificationmetadata.cpp
+    notificationmetadata.h
     credentialstore.cpp
     credentialstore.h
     todoistcontroller.cpp
     todoistcontroller.h
+)
+
+qt_add_resources(todoistclient "todoist_notification_metadata"
+    PREFIX "/"
+    FILES org.suryask.todoist.notifyrc
 )
 
 qt_add_qml_module(todoistclient
@@ -19,6 +26,13 @@ target_link_libraries(todoistclient PRIVATE
 )
 
 install(TARGETS todoistclient ${KDE_INSTALL_TARGETS_DEFAULT_ARGS})
-install(FILES org.suryask.todoist.desktop DESTINATION ${KDE_INSTALL_APPDIR})
+configure_file(
+    org.suryask.todoist.desktop.in
+    ${CMAKE_CURRENT_BINARY_DIR}/org.suryask.todoist.desktop
+    @ONLY
+)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/org.suryask.todoist.desktop
+    DESTINATION ${KDE_INSTALL_APPDIR}
+)
 install(FILES org.suryask.todoist.metainfo.xml DESTINATION ${KDE_INSTALL_METAINFODIR})
 install(FILES org.suryask.todoist.notifyrc DESTINATION ${KDE_INSTALL_DATADIR}/knotifications6)
