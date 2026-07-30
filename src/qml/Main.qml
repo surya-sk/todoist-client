@@ -4,6 +4,7 @@ import QtQuick.Layouts
 import QtCore as QtCore
 import Qt.labs.platform as Platform
 import org.kde.kirigami as Kirigami
+import org.kde.kirigamiaddons.dateandtime as DateTime
 
 Kirigami.ApplicationWindow {
     id: root
@@ -100,7 +101,23 @@ Kirigami.ApplicationWindow {
         taskDialog.originalSectionId = task ? task.sectionId : ""
         taskTitle.text = task ? task.content : ""
         taskDescription.text = task ? task.description : ""
-        taskDue.text = task ? task.due : ""
+        taskDialog.hadOriginalDue = Boolean(task && (task.dueDateTime || task.dueDate))
+        taskDialog.dueEnabled = taskDialog.hadOriginalDue
+        taskDialog.dueTimeEnabled = Boolean(task && task.dueDateTime)
+        if (taskDialog.hadOriginalDue) {
+            if (task.dueDateTime) {
+                taskDialog.selectedDueDate = new Date(task.dueDateTime)
+            } else {
+                let parts = task.dueDate.slice(0, 10).split("-")
+                taskDialog.selectedDueDate = new Date(Number(parts[0]), Number(parts[1]) - 1,
+                                                      Number(parts[2]), 9, 0)
+            }
+        } else {
+            let tomorrow = new Date()
+            tomorrow.setDate(tomorrow.getDate() + 1)
+            tomorrow.setHours(9, 0, 0, 0)
+            taskDialog.selectedDueDate = tomorrow
+        }
         taskPriority.currentIndex = task ? Math.max(0, task.priority - 1) : 0
         taskProject.currentIndex = -1
         taskSection.currentIndex = 0
@@ -164,6 +181,10 @@ Kirigami.ApplicationWindow {
         property string taskId: ""
         property string originalProjectId: ""
         property string originalSectionId: ""
+        property bool hadOriginalDue: false
+        property bool dueEnabled: false
+        property bool dueTimeEnabled: false
+        property date selectedDueDate: new Date()
         anchors.centerIn: parent
         modal: true
         width: Math.min(620, root.width - 40)
@@ -186,10 +207,41 @@ Kirigami.ApplicationWindow {
             }
             RowLayout {
                 Layout.fillWidth: true
-                Controls.TextField {
-                    id: taskDue
+                Controls.Button {
                     Layout.fillWidth: true
-                    placeholderText: i18nc("@info:placeholder", "Due date (tomorrow at 5pm)")
+                    text: taskDialog.dueEnabled
+                        ? Qt.formatDate(taskDialog.selectedDueDate, Qt.DefaultLocaleShortDate)
+                        : i18nc("@action:button", "Add due date")
+                    icon.name: "view-calendar-day"
+                    onClicked: {
+                        dueDatePopup.value = taskDialog.selectedDueDate
+                        dueDatePopup.open()
+                    }
+                }
+                Controls.CheckBox {
+                    visible: taskDialog.dueEnabled
+                    text: i18nc("@option:check", "Time")
+                    checked: taskDialog.dueTimeEnabled
+                    onToggled: taskDialog.dueTimeEnabled = checked
+                }
+                Controls.Button {
+                    visible: taskDialog.dueEnabled && taskDialog.dueTimeEnabled
+                    text: Qt.formatTime(taskDialog.selectedDueDate, Qt.DefaultLocaleShortDate)
+                    icon.name: "appointment-new"
+                    onClicked: {
+                        dueTimePopup.value = taskDialog.selectedDueDate
+                        dueTimePopup.open()
+                    }
+                }
+                Controls.ToolButton {
+                    visible: taskDialog.dueEnabled
+                    icon.name: "edit-clear"
+                    onClicked: {
+                        taskDialog.dueEnabled = false
+                        taskDialog.dueTimeEnabled = false
+                    }
+                    Controls.ToolTip.text: i18nc("@info:tooltip", "Remove due date")
+                    Controls.ToolTip.visible: hovered
                 }
                 Controls.ComboBox {
                     id: taskPriority
@@ -233,8 +285,13 @@ Kirigami.ApplicationWindow {
                     onClicked: {
                         let projectId = taskProject.currentValue
                         let sectionId = taskSection.currentValue
+                        let dueDate = taskDialog.dueEnabled && !taskDialog.dueTimeEnabled
+                            ? Qt.formatDate(taskDialog.selectedDueDate, "yyyy-MM-dd") : ""
+                        let dueDateTime = taskDialog.dueEnabled && taskDialog.dueTimeEnabled
+                            ? taskDialog.selectedDueDate.toISOString() : ""
                         controller.saveTask(taskDialog.taskId, taskTitle.text,
-                                            taskDescription.text, taskDue.text,
+                                            taskDescription.text, dueDate, dueDateTime,
+                                            !taskDialog.dueEnabled && taskDialog.hadOriginalDue,
                                             projectId, sectionId, taskPriority.currentIndex + 1,
                                             taskDialog.originalProjectId,
                                             taskDialog.originalSectionId)
@@ -242,6 +299,29 @@ Kirigami.ApplicationWindow {
                     }
                 }
             }
+        }
+    }
+
+    DateTime.DatePopup {
+        id: dueDatePopup
+        anchors.centerIn: parent
+        modal: true
+        onAccepted: {
+            let updated = new Date(value)
+            updated.setHours(taskDialog.selectedDueDate.getHours(),
+                             taskDialog.selectedDueDate.getMinutes(), 0, 0)
+            taskDialog.selectedDueDate = updated
+            taskDialog.dueEnabled = true
+        }
+    }
+
+    DateTime.TimePopup {
+        id: dueTimePopup
+        anchors.centerIn: parent
+        onAccepted: {
+            let updated = new Date(taskDialog.selectedDueDate)
+            updated.setHours(value.getHours(), value.getMinutes(), 0, 0)
+            taskDialog.selectedDueDate = updated
         }
     }
 
@@ -739,20 +819,10 @@ Kirigami.ApplicationWindow {
                             color: Kirigami.Theme.disabledTextColor
                         }
                     }
-                    Controls.BusyIndicator { running: controller.busy; visible: running }
-                    Controls.Button {
-                        visible: controller.projectView
-                        text: i18nc("@action:button", "Add section")
-                        icon.name: "view-list-tree"
-                        enabled: controller.connected
-                        onClicked: { nameDialog.sectionMode = true; nameDialog.open() }
-                    }
-                    Controls.Button {
-                        text: i18nc("@action:button", "Add task")
-                        icon.name: "list-add"
-                        highlighted: true
-                        enabled: controller.connected
-                        onClicked: root.openTask(null)
+                    Controls.BusyIndicator {
+                        Layout.alignment: Qt.AlignTop
+                        running: controller.busy
+                        visible: running
                     }
                 }
                 Kirigami.InlineMessage {
@@ -763,6 +833,27 @@ Kirigami.ApplicationWindow {
                     showCloseButton: true
                     onVisibleChanged: if (!visible) controller.clearError()
                 }
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Kirigami.Units.smallSpacing
+                    Controls.Button {
+                        text: i18nc("@action:button", "Add task")
+                        icon.name: "list-add"
+                        flat: true
+                        enabled: controller.connected
+                        onClicked: root.openTask(null)
+                    }
+                    Controls.Button {
+                        visible: controller.projectView
+                        text: i18nc("@action:button", "Add section")
+                        icon.name: "view-list-tree"
+                        flat: true
+                        enabled: controller.connected
+                        onClicked: { nameDialog.sectionMode = true; nameDialog.open() }
+                    }
+                    Item { Layout.fillWidth: true }
+                }
+                Kirigami.Separator { Layout.fillWidth: true }
                 Kirigami.PlaceholderMessage {
                     Layout.fillWidth: true
                     Layout.fillHeight: true

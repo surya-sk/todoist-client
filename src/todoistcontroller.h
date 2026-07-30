@@ -60,7 +60,8 @@ public:
     Q_INVOKABLE QVariantList sectionsForProject(const QString &projectId) const;
     Q_INVOKABLE void refresh();
     Q_INVOKABLE void saveTask(const QString &id, const QString &content,
-                              const QString &description, const QString &dueString,
+                              const QString &description, const QString &dueDate,
+                              const QString &dueDateTime, bool clearDue,
                               const QString &projectId, const QString &sectionId,
                               int priority, const QString &originalProjectId = {},
                               const QString &originalSectionId = {});

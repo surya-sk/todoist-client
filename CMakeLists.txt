@@ -14,6 +14,7 @@ include(KDECompilerSettings NO_POLICY_SCOPE)
 find_package(Qt6 6.8 REQUIRED COMPONENTS Core Gui Network Qml Quick QuickControls2)
 find_package(KF6 6.0 REQUIRED COMPONENTS CoreAddons I18n Notifications Wallet WindowSystem)
 find_package(KF6Kirigami 6.0 REQUIRED)
+find_package(KF6KirigamiAddons 1.0 REQUIRED)
 
 qt_standard_project_setup(REQUIRES 6.8)
 add_subdirectory(src)

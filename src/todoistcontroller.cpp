@@ -323,7 +323,8 @@ void TodoistController::requestUser()
 }
 
 void TodoistController::saveTask(const QString &id, const QString &content,
-                                 const QString &description, const QString &dueString,
+                                 const QString &description, const QString &dueDate,
+                                 const QString &dueDateTime, bool clearDue,
                                  const QString &projectId, const QString &sectionId,
                                  int priority, const QString &originalProjectId,
                                  const QString &originalSectionId)
@@ -335,8 +336,12 @@ void TodoistController::saveTask(const QString &id, const QString &content,
     QJsonObject body{{QStringLiteral("content"), content.trimmed()},
                      {QStringLiteral("description"), description.trimmed()},
                      {QStringLiteral("priority"), qBound(1, priority, 4)}};
-    if (!dueString.trimmed().isEmpty()) {
-        body.insert(QStringLiteral("due_string"), dueString.trimmed());
+    if (!dueDateTime.isEmpty()) {
+        body.insert(QStringLiteral("due_datetime"), dueDateTime);
+    } else if (!dueDate.isEmpty()) {
+        body.insert(QStringLiteral("due_date"), dueDate);
+    } else if (clearDue && !id.isEmpty()) {
+        body.insert(QStringLiteral("due_string"), QStringLiteral("no date"));
     }
     if (id.isEmpty()) {
         if (!sectionId.isEmpty()) {
