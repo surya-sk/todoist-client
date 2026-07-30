@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls as Controls
 import QtQuick.Layouts
+import QtCore as QtCore
 import Qt.labs.platform as Platform
 import org.kde.kirigami as Kirigami
 
@@ -14,10 +15,13 @@ Kirigami.ApplicationWindow {
     visible: true
     title: i18nc("@title:window", "Todoist")
     color: "transparent"
+    readonly property real sidebarOpacity:
+        Math.max(0.38, 1.0 - appearanceSettings.blurStrength * 0.006)
 
-    Rectangle {
-        anchors.fill: parent
-        color: Qt.alpha(Kirigami.Theme.backgroundColor, 0.34)
+    QtCore.Settings {
+        id: appearanceSettings
+        category: "Appearance"
+        property int blurStrength: 65
     }
 
     Platform.MenuBar {
@@ -440,6 +444,32 @@ Kirigami.ApplicationWindow {
                         checked: controller.notificationsEnabled
                         onToggled: controller.notificationsEnabled = checked
                     }
+
+                    Kirigami.Separator { Layout.fillWidth: true }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 2
+                            Controls.Label {
+                                text: i18nc("@label", "Sidebar blur")
+                                font.weight: Font.DemiBold
+                            }
+                            Controls.Label {
+                                text: i18nc("@info", "Adjust the translucent sidebar material")
+                                color: Kirigami.Theme.disabledTextColor
+                            }
+                        }
+                        Controls.Slider {
+                            from: 0
+                            to: 100
+                            stepSize: 5
+                            value: appearanceSettings.blurStrength
+                            onMoved: appearanceSettings.blurStrength = value
+                            Layout.preferredWidth: 180
+                        }
+                    }
                 }
             }
         }
@@ -484,15 +514,13 @@ Kirigami.ApplicationWindow {
 
     RowLayout {
         anchors.fill: parent
-        anchors.margins: Kirigami.Units.largeSpacing
-        spacing: Kirigami.Units.largeSpacing
+        spacing: 0
 
         Rectangle {
             Layout.fillHeight: true
             Layout.preferredWidth: 252
-            radius: 14
-            color: Qt.alpha(Kirigami.Theme.alternateBackgroundColor, 0.68)
-            border.color: Qt.alpha(Kirigami.Theme.textColor, 0.11)
+            color: Qt.alpha(Kirigami.Theme.alternateBackgroundColor,
+                            root.sidebarOpacity)
             ColumnLayout {
                 anchors.fill: parent
                 anchors.margins: Kirigami.Units.largeSpacing
@@ -684,12 +712,14 @@ Kirigami.ApplicationWindow {
             }
         }
 
+        Kirigami.Separator {
+            Layout.fillHeight: true
+        }
+
         Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            radius: 14
-            color: Qt.alpha(Kirigami.Theme.backgroundColor, 0.58)
-            border.color: Qt.alpha(Kirigami.Theme.textColor, 0.10)
+            color: Kirigami.Theme.backgroundColor
             ColumnLayout {
                 anchors.fill: parent
                 anchors.margins: Kirigami.Units.gridUnit * 2
