@@ -26,6 +26,10 @@ class TodoistController final : public QObject
     Q_PROPERTY(bool busy READ busy NOTIFY busyChanged)
     Q_PROPERTY(QString error READ error NOTIFY errorChanged)
     Q_PROPERTY(int taskCount READ taskCount NOTIFY dataChanged)
+    Q_PROPERTY(int refreshIntervalMinutes READ refreshIntervalMinutes
+                   WRITE setRefreshIntervalMinutes NOTIFY settingsChanged)
+    Q_PROPERTY(bool notificationsEnabled READ notificationsEnabled
+                   WRITE setNotificationsEnabled NOTIFY settingsChanged)
 
 public:
     explicit TodoistController(QObject *parent = nullptr);
@@ -42,6 +46,10 @@ public:
     bool busy() const;
     QString error() const;
     int taskCount() const;
+    int refreshIntervalMinutes() const;
+    bool notificationsEnabled() const;
+    void setRefreshIntervalMinutes(int minutes);
+    void setNotificationsEnabled(bool enabled);
 
     Q_INVOKABLE void connectToken(const QString &token);
     Q_INVOKABLE void disconnect();
@@ -69,6 +77,7 @@ Q_SIGNALS:
     void busyChanged();
     void errorChanged();
     void accountChanged();
+    void settingsChanged();
 
 private:
     enum class View { Today, Inbox, Project, Section };
@@ -105,4 +114,6 @@ private:
     int m_pending = 0;
     int m_todayCount = 0;
     bool m_busy = false;
+    int m_refreshIntervalMinutes = 5;
+    bool m_notificationsEnabled = true;
 };

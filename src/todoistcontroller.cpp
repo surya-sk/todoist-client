@@ -48,7 +48,15 @@ QVariantMap taskMap(const QJsonObject &object)
 TodoistController::TodoistController(QObject *parent)
     : QObject(parent)
 {
-    m_refreshTimer.setInterval(5 * 60 * 1000);
+    QSettings settings;
+    m_refreshIntervalMinutes =
+        settings.value(QStringLiteral("preferences/refreshIntervalMinutes"), 5)
+            .toInt();
+    m_notificationsEnabled =
+        settings.value(QStringLiteral("preferences/notificationsEnabled"), true)
+            .toBool();
+    m_refreshTimer.setInterval(
+        qMax(1, m_refreshIntervalMinutes) * 60 * 1000);
     connect(&m_refreshTimer, &QTimer::timeout, this, &TodoistController::refresh);
     m_reminderTimer.setInterval(60 * 1000);
     connect(&m_reminderTimer, &QTimer::timeout, this, &TodoistController::checkReminders);
@@ -59,7 +67,9 @@ TodoistController::TodoistController(QObject *parent)
         Q_EMIT connectedChanged();
         if (!m_token.isEmpty()) {
             refresh();
-            m_refreshTimer.start();
+            if (m_refreshIntervalMinutes > 0) {
+                m_refreshTimer.start();
+            }
         }
     });
 }
@@ -80,6 +90,46 @@ bool TodoistController::connected() const { return !m_token.isEmpty(); }
 bool TodoistController::busy() const { return m_busy; }
 QString TodoistController::error() const { return m_error; }
 int TodoistController::taskCount() const { return m_tasks.size(); }
+int TodoistController::refreshIntervalMinutes() const
+{
+    return m_refreshIntervalMinutes;
+}
+bool TodoistController::notificationsEnabled() const
+{
+    return m_notificationsEnabled;
+}
+
+void TodoistController::setRefreshIntervalMinutes(int minutes)
+{
+    const auto normalized =
+        minutes == 0 ? 0 : qBound(1, minutes, 120);
+    if (m_refreshIntervalMinutes == normalized) {
+        return;
+    }
+    m_refreshIntervalMinutes = normalized;
+    QSettings().setValue(
+        QStringLiteral("preferences/refreshIntervalMinutes"),
+        normalized);
+    m_refreshTimer.setInterval(qMax(1, normalized) * 60 * 1000);
+    if (normalized > 0 && connected()) {
+        m_refreshTimer.start();
+    } else {
+        m_refreshTimer.stop();
+    }
+    Q_EMIT settingsChanged();
+}
+
+void TodoistController::setNotificationsEnabled(bool enabled)
+{
+    if (m_notificationsEnabled == enabled) {
+        return;
+    }
+    m_notificationsEnabled = enabled;
+    QSettings().setValue(
+        QStringLiteral("preferences/notificationsEnabled"),
+        enabled);
+    Q_EMIT settingsChanged();
+}
 
 void TodoistController::connectToken(const QString &token)
 {
@@ -97,7 +147,9 @@ void TodoistController::connectToken(const QString &token)
     m_token = value;
     setError({});
     Q_EMIT connectedChanged();
-    m_refreshTimer.start();
+    if (m_refreshIntervalMinutes > 0) {
+        m_refreshTimer.start();
+    }
     refresh();
 }
 
@@ -526,6 +578,9 @@ QString TodoistController::sectionName(const QString &id) const
 
 void TodoistController::checkReminders()
 {
+    if (!m_notificationsEnabled) {
+        return;
+    }
     const auto now = QDateTime::currentDateTime();
     QSettings settings;
     for (const auto &value : std::as_const(m_allTasks)) {
@@ -556,7 +611,7 @@ void TodoistController::checkReminders()
             notification->setText(task.value(QStringLiteral("content")).toString()
                 + (dateOnly ? QStringLiteral("\nDue today")
                             : QStringLiteral("\nDue ") + due.toString(QStringLiteral("h:mm AP"))));
-            notification->setIconName(QStringLiteral("checkbox"));
+            notification->setIconName(QStringLiteral("todoist"));
             notification->sendEvent();
             settings.setValue(key, true);
         }

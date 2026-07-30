@@ -4,7 +4,7 @@
         "Authors": [{"Name": "Surya"}],
         "Category": "Utilities",
         "Description": "Today's tasks from the Todoist desktop application",
-        "Icon": "view-task",
+        "Icon": "todoist",
         "Id": "org.suryask.todoisttoday",
         "License": "GPL-3.0-or-later",
         "Name": "Todoist Today",

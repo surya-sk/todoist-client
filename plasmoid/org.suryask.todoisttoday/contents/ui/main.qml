@@ -86,7 +86,7 @@ PlasmoidItem {
     preferredRepresentation: fullRepresentation
 
     compactRepresentation: PlasmaComponents.ToolButton {
-        icon.name: "view-task"
+        icon.name: "todoist"
         text: root.cacheAvailable ? root.todayTasks.length.toString() : "–"
         display: PlasmaComponents.AbstractButton.TextBesideIcon
         onClicked: root.expanded = !root.expanded
@@ -109,7 +109,7 @@ PlasmoidItem {
                 contentItem: RowLayout {
                     spacing: Kirigami.Units.largeSpacing
                     Kirigami.Icon {
-                        source: "view-task"
+                        source: "todoist"
                         Layout.preferredWidth: Kirigami.Units.iconSizes.medium
                         Layout.preferredHeight: Layout.preferredWidth
                     }

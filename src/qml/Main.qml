@@ -15,6 +15,11 @@ Kirigami.ApplicationWindow {
     title: i18nc("@title:window", "Todoist")
     color: "transparent"
 
+    Rectangle {
+        anchors.fill: parent
+        color: Qt.alpha(Kirigami.Theme.backgroundColor, 0.34)
+    }
+
     Platform.MenuBar {
         window: root
         Platform.Menu {
@@ -73,6 +78,14 @@ Kirigami.ApplicationWindow {
                 text: i18nc("@action:inmenu", "&Log Out")
                 enabled: controller.connected
                 onTriggered: controller.disconnect()
+            }
+        }
+        Platform.Menu {
+            title: i18nc("@title:menu", "&Todoist")
+            Platform.MenuItem {
+                text: i18nc("@action:inmenu", "&Settings…")
+                shortcut: "Ctrl+,"
+                onTriggered: settingsDialog.open()
             }
         }
     }
@@ -351,9 +364,90 @@ Kirigami.ApplicationWindow {
         }
     }
 
+    Controls.Dialog {
+        id: settingsDialog
+        anchors.centerIn: parent
+        modal: true
+        width: Math.min(520, root.width - 40)
+        title: i18nc("@title:dialog", "Settings")
+        standardButtons: Controls.Dialog.Close
+        onOpened: {
+            for (let i = 0; i < refreshInterval.count; ++i) {
+                if (refreshInterval.model[i].minutes
+                        === controller.refreshIntervalMinutes) {
+                    refreshInterval.currentIndex = i
+                    break
+                }
+            }
+        }
+        contentItem: ColumnLayout {
+            spacing: Kirigami.Units.largeSpacing
+
+            Controls.Label {
+                text: i18nc("@title:group", "General")
+                font.pixelSize: 18
+                font.weight: Font.DemiBold
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                implicitHeight: settingsColumn.implicitHeight
+                                + Kirigami.Units.largeSpacing * 2
+                radius: 12
+                color: Qt.alpha(Kirigami.Theme.alternateBackgroundColor, 0.72)
+                border.color: Qt.alpha(Kirigami.Theme.textColor, 0.08)
+
+                ColumnLayout {
+                    id: settingsColumn
+                    anchors.fill: parent
+                    anchors.margins: Kirigami.Units.largeSpacing
+                    spacing: Kirigami.Units.largeSpacing
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 2
+                            Controls.Label {
+                                text: i18nc("@label", "Automatic refresh")
+                                font.weight: Font.DemiBold
+                            }
+                            Controls.Label {
+                                text: i18nc("@info", "Keep tasks current in the background")
+                                color: Kirigami.Theme.disabledTextColor
+                            }
+                        }
+                        Controls.ComboBox {
+                            id: refreshInterval
+                            textRole: "label"
+                            model: [
+                                {"label": i18nc("@item", "Off"), "minutes": 0},
+                                {"label": i18nc("@item", "Every minute"), "minutes": 1},
+                                {"label": i18nc("@item", "Every 5 minutes"), "minutes": 5},
+                                {"label": i18nc("@item", "Every 15 minutes"), "minutes": 15},
+                                {"label": i18nc("@item", "Every 30 minutes"), "minutes": 30}
+                            ]
+                            onActivated: controller.refreshIntervalMinutes =
+                                             model[currentIndex].minutes
+                        }
+                    }
+
+                    Kirigami.Separator { Layout.fillWidth: true }
+
+                    Controls.Switch {
+                        Layout.fillWidth: true
+                        text: i18nc("@label", "Due-task notifications")
+                        checked: controller.notificationsEnabled
+                        onToggled: controller.notificationsEnabled = checked
+                    }
+                }
+            }
+        }
+    }
+
     globalDrawer: Kirigami.GlobalDrawer {
         title: i18nc("@title", "Todoist")
-        titleIcon: "checkbox"
+        titleIcon: "todoist"
         isMenu: true
         actions: [
             Kirigami.Action {
@@ -390,19 +484,22 @@ Kirigami.ApplicationWindow {
 
     RowLayout {
         anchors.fill: parent
-        spacing: 0
+        anchors.margins: Kirigami.Units.largeSpacing
+        spacing: Kirigami.Units.largeSpacing
 
         Rectangle {
             Layout.fillHeight: true
-            Layout.preferredWidth: 270
-            color: Qt.alpha(Kirigami.Theme.alternateBackgroundColor, 0.88)
+            Layout.preferredWidth: 252
+            radius: 14
+            color: Qt.alpha(Kirigami.Theme.alternateBackgroundColor, 0.68)
+            border.color: Qt.alpha(Kirigami.Theme.textColor, 0.11)
             ColumnLayout {
                 anchors.fill: parent
                 anchors.margins: Kirigami.Units.largeSpacing
                 spacing: Kirigami.Units.smallSpacing
                 RowLayout {
                     Layout.bottomMargin: Kirigami.Units.largeSpacing
-                    Kirigami.Icon { source: "checkbox"; implicitWidth: 32; implicitHeight: 32 }
+                    Kirigami.Icon { source: "todoist"; implicitWidth: 32; implicitHeight: 32 }
                     Controls.Label {
                         text: i18nc("@title", "Todoist")
                         font.pixelSize: 22
@@ -416,12 +513,34 @@ Kirigami.ApplicationWindow {
                         Controls.ToolTip.text: i18nc("@info:tooltip", "Add task")
                         Controls.ToolTip.visible: hovered
                     }
+                    Controls.ToolButton {
+                        icon.name: "view-refresh"
+                        enabled: controller.connected && !controller.busy
+                        onClicked: controller.refresh()
+                        Controls.ToolTip.text: i18nc("@info:tooltip", "Refresh tasks")
+                        Controls.ToolTip.visible: hovered
+                    }
+                    Controls.ToolButton {
+                        icon.name: "settings-configure"
+                        onClicked: settingsDialog.open()
+                        Controls.ToolTip.text: i18nc("@info:tooltip", "Settings")
+                        Controls.ToolTip.visible: hovered
+                    }
                 }
                 Controls.ItemDelegate {
+                    id: todayDelegate
                     Layout.fillWidth: true
                     icon.name: "view-calendar-day"
                     highlighted: controller.selectedTitle === "Today"
                     onClicked: controller.selectToday()
+                    background: Rectangle {
+                        radius: 9
+                        color: todayDelegate.highlighted
+                            ? Qt.alpha(Kirigami.Theme.highlightColor, 0.16)
+                            : todayDelegate.hovered
+                                ? Qt.alpha(Kirigami.Theme.textColor, 0.06)
+                                : "transparent"
+                    }
                     contentItem: RowLayout {
                         Kirigami.Icon {
                             source: "view-calendar-day"
@@ -450,11 +569,20 @@ Kirigami.ApplicationWindow {
                     }
                 }
                 Controls.ItemDelegate {
+                    id: inboxDelegate
                     Layout.fillWidth: true
                     text: i18nc("@title", "Inbox")
                     icon.name: "mail-folder-inbox"
                     highlighted: controller.selectedTitle === "Inbox"
                     onClicked: controller.selectInbox()
+                    background: Rectangle {
+                        radius: 9
+                        color: inboxDelegate.highlighted
+                            ? Qt.alpha(Kirigami.Theme.highlightColor, 0.16)
+                            : inboxDelegate.hovered
+                                ? Qt.alpha(Kirigami.Theme.textColor, 0.06)
+                                : "transparent"
+                    }
                 }
                 RowLayout {
                     Layout.fillWidth: true
@@ -477,12 +605,21 @@ Kirigami.ApplicationWindow {
                     clip: true
                     model: controller.projects
                     delegate: Controls.ItemDelegate {
+                        id: projectDelegate
                         required property var modelData
                         width: ListView.view.width
                         text: modelData.name
                         icon.name: modelData.inbox ? "mail-folder-inbox" : "folder"
                         highlighted: controller.selectedTitle === modelData.name
                         onClicked: controller.selectProject(modelData.id, modelData.name)
+                        background: Rectangle {
+                            radius: 9
+                            color: projectDelegate.highlighted
+                                ? Qt.alpha(Kirigami.Theme.highlightColor, 0.16)
+                                : projectDelegate.hovered
+                                    ? Qt.alpha(Kirigami.Theme.textColor, 0.06)
+                                    : "transparent"
+                        }
                     }
                 }
                 Controls.ItemDelegate {
@@ -547,12 +684,12 @@ Kirigami.ApplicationWindow {
             }
         }
 
-        Kirigami.Separator { Layout.fillHeight: true }
-
         Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            color: Qt.alpha(Kirigami.Theme.backgroundColor, 0.94)
+            radius: 14
+            color: Qt.alpha(Kirigami.Theme.backgroundColor, 0.58)
+            border.color: Qt.alpha(Kirigami.Theme.textColor, 0.10)
             ColumnLayout {
                 anchors.fill: parent
                 anchors.margins: Kirigami.Units.gridUnit * 2
@@ -653,10 +790,19 @@ Kirigami.ApplicationWindow {
                         Repeater {
                             model: modelData.tasks
                             delegate: Controls.ItemDelegate {
+                                id: taskDelegate
                                 required property var modelData
                                 width: parent.width
                                 implicitHeight: Math.max(72, taskRow.implicitHeight + 20)
                                 onClicked: root.openTask(modelData)
+                                background: Rectangle {
+                                    radius: 11
+                                    color: taskDelegate.hovered
+                                        ? Qt.alpha(Kirigami.Theme.highlightColor, 0.10)
+                                        : Qt.alpha(Kirigami.Theme.backgroundColor, 0.64)
+                                    border.color: Qt.alpha(
+                                                      Kirigami.Theme.textColor, 0.07)
+                                }
                                 contentItem: RowLayout {
                                     id: taskRow
                                     spacing: Kirigami.Units.largeSpacing

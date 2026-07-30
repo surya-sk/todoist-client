@@ -2,7 +2,7 @@
 Name=Todoist
 Comment=A fast native Todoist client
 Exec=/home/surya/.local/bin/todoistclient
-Icon=checkbox
+Icon=todoist
 Type=Application
 Categories=Office;ProjectManagement;Qt;KDE;
 Terminal=false
