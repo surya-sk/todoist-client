@@ -20,7 +20,7 @@ int main(int argc, char **argv)
     KLocalizedString::setApplicationDomain("todoistclient");
     KAboutData about(QStringLiteral("todoistclient"),
                      i18nc("@title", "Todoist"),
-                     QStringLiteral("0.1.0"),
+                     QStringLiteral("0.1.1"),
                      i18nc("@info", "A fast native Todoist client"),
                      KAboutLicense::GPL_V3);
     about.setDesktopFileName(QStringLiteral("org.suryask.todoist"));
